@@ -75,20 +75,13 @@ pub struct Runner<A: Application + 'static + Send> {
 
 impl<A: Application + 'static + Send> Runner<A> {
     /// Open a new window
-    pub fn open(
-        settings: Settings<A::Flags>,
-    ) -> (Handle, Option<baseview::AppRunner>) {
-        let (handle_tx, handle_rx) =
-            rtrb::RingBuffer::new(Handle::QUEUE_SIZE).split();
+    pub fn open(settings: Settings<A::Flags>) -> (Handle, Option<baseview::AppRunner>) {
+        let (handle_tx, handle_rx) = rtrb::RingBuffer::new(Handle::QUEUE_SIZE).split();
 
         // WindowScalePolicy does not implement Copy/Clone.
         let scale_policy = match &settings.window.scale {
-            WindowScalePolicy::SystemScaleFactor => {
-                WindowScalePolicy::SystemScaleFactor
-            }
-            WindowScalePolicy::ScaleFactor(scale) => {
-                WindowScalePolicy::ScaleFactor(*scale)
-            }
+            WindowScalePolicy::SystemScaleFactor => WindowScalePolicy::SystemScaleFactor,
+            WindowScalePolicy::ScaleFactor(scale) => WindowScalePolicy::ScaleFactor(*scale),
         };
 
         let logical_width = settings.window.size.width as f64;
@@ -108,13 +101,11 @@ impl<A: Application + 'static + Send> Runner<A> {
                     let mut debug = Debug::new();
                     debug.startup_started();
 
-                    let (runtime_tx, runtime_rx) =
-                        mpsc::unbounded::<A::Message>();
+                    let (runtime_tx, runtime_rx) = mpsc::unbounded::<A::Message>();
 
                     let mut runtime = {
                         let proxy = Proxy::new(runtime_tx);
-                        let executor =
-                            <A::Executor as Executor>::new().unwrap();
+                        let executor = <A::Executor as Executor>::new().unwrap();
 
                         Runtime::new(executor, proxy)
                     };
@@ -127,8 +118,7 @@ impl<A: Application + 'static + Send> Runner<A> {
 
                     let mut window_subs = WindowSubs::default();
 
-                    let subscription =
-                        application.subscription(&mut window_subs);
+                    let subscription = application.subscription(&mut window_subs);
 
                     runtime.spawn(init_command);
                     runtime.track(subscription);
@@ -144,19 +134,16 @@ impl<A: Application + 'static + Send> Runner<A> {
                         (logical_height * scale) as u32,
                     );
 
-                    let viewport =
-                        Viewport::with_physical_size(physical_size, scale);
+                    let viewport = Viewport::with_physical_size(physical_size, scale);
 
                     let renderer_settings = A::renderer_settings();
 
                     let (mut compositor, renderer) =
-                        <Compositor as IGCompositor>::new(renderer_settings)
-                            .unwrap();
+                        <Compositor as IGCompositor>::new(renderer_settings).unwrap();
 
                     let surface = compositor.create_surface(window);
 
-                    let state =
-                        State::new(&application, viewport, scale_policy);
+                    let state = State::new(&application, viewport, scale_policy);
 
                     let (sender, receiver) = mpsc::unbounded();
 
@@ -172,8 +159,7 @@ impl<A: Application + 'static + Send> Runner<A> {
                         window_subs,
                     ));
 
-                    let runtime_context =
-                        task::Context::from_waker(task::noop_waker_ref());
+                    let runtime_context = task::Context::from_waker(task::noop_waker_ref());
 
                     Self {
                         sender,
@@ -208,8 +194,7 @@ impl<A: Application + 'static + Send> WindowHandler for Runner<A> {
                         .expect("Send event");
 
                     // Flush all messages so the application receives the close event. This will block until the instance is finished.
-                    let _ =
-                        self.instance.as_mut().poll(&mut self.runtime_context);
+                    let _ = self.instance.as_mut().poll(&mut self.runtime_context);
 
                     return;
                 }
@@ -287,11 +272,7 @@ async fn run_instance<A, E>(
     let mut swap_chain = {
         let physical_size = state.physical_size();
 
-        compositor.create_swap_chain(
-            &surface,
-            physical_size.width,
-            physical_size.height,
-        )
+        compositor.create_swap_chain(&surface, physical_size.width, physical_size.height)
     };
 
     let mut user_interface = ManuallyDrop::new(build_user_interface(
@@ -302,8 +283,7 @@ async fn run_instance<A, E>(
         &mut debug,
     ));
 
-    let mut primitive =
-        user_interface.draw(&mut renderer, state.cursor_position());
+    let mut primitive = user_interface.draw(&mut renderer, state.cursor_position());
     let mut mouse_interaction = iced_native::mouse::Interaction::default();
 
     let mut events = Vec::new();
@@ -346,8 +326,7 @@ async fn run_instance<A, E>(
                 }
 
                 if !messages.is_empty() {
-                    let cache =
-                        ManuallyDrop::into_inner(user_interface).into_cache();
+                    let cache = ManuallyDrop::into_inner(user_interface).into_cache();
 
                     // Update application
                     update(
@@ -371,8 +350,7 @@ async fn run_instance<A, E>(
                 }
 
                 debug.draw_started();
-                primitive =
-                    user_interface.draw(&mut renderer, state.cursor_position());
+                primitive = user_interface.draw(&mut renderer, state.cursor_position());
                 debug.draw_finished();
 
                 redraw_requested = true;
@@ -402,8 +380,7 @@ async fn run_instance<A, E>(
                     debug.layout_finished();
 
                     debug.draw_started();
-                    primitive = user_interface
-                        .draw(&mut renderer, state.cursor_position());
+                    primitive = user_interface.draw(&mut renderer, state.cursor_position());
                     debug.draw_finished();
 
                     viewport_version = current_viewport_version;
@@ -446,8 +423,7 @@ async fn run_instance<A, E>(
                     // Send message to user before exiting the loop.
 
                     messages.push(message.clone());
-                    let cache =
-                        ManuallyDrop::into_inner(user_interface).into_cache();
+                    let cache = ManuallyDrop::into_inner(user_interface).into_cache();
 
                     // Update application
                     update(
