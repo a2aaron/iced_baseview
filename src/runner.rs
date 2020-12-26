@@ -39,6 +39,7 @@ impl<Message: Clone> Default for WindowSubs<Message> {
 
 pub(crate) enum HandleMessage {
     CloseRequested,
+    Baseview(baseview::Event),
 }
 
 #[allow(missing_debug_implementations)]
@@ -55,6 +56,10 @@ impl Handle {
 
     pub fn request_window_close(&mut self) {
         self.handle_tx.push(HandleMessage::CloseRequested).unwrap();
+    }
+
+    pub fn send_baseview_event(&mut self, event: baseview::Event) {
+        self.handle_tx.push(HandleMessage::Baseview(event)).unwrap();
     }
 }
 
@@ -207,6 +212,14 @@ impl<A: Application + 'static + Send> WindowHandler for Runner<A> {
                         self.instance.as_mut().poll(&mut self.runtime_context);
 
                     return;
+                }
+                HandleMessage::Baseview(event) => {
+                    // Send an arbitrary Baseview event (usually useful if a )
+                    // VST host captures keyboard events meant for a VST and
+                    // the VST wants to pass the keyboard event along
+                    self.sender
+                        .start_send(RuntimeEvent::Baseview(event))
+                        .expect("Couldn't send baseview event.");
                 }
             }
         }
