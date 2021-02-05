@@ -45,6 +45,7 @@ pub struct IcedWindow<A: Application + 'static + Send> {
     instance: Pin<Box<dyn futures::Future<Output = ()>>>,
     runtime_context: futures::task::Context<'static>,
     runtime_rx: mpsc::UnboundedReceiver<A::Message>,
+    external_rx: Option<mpsc::UnboundedReceiver<baseview::Event>>,
 }
 
 impl<A: Application + 'static + Send> IcedWindow<A> {
@@ -126,14 +127,25 @@ impl<A: Application + 'static + Send> IcedWindow<A> {
             instance,
             runtime_context,
             runtime_rx,
+            external_rx: None,
         }
+    }
+
+    fn with_reciever(
+        &mut self,
+        reciever: mpsc::UnboundedReceiver<baseview::Event>,
+    ) {
+        self.external_rx = Some(reciever);
     }
 
     /// Open a new child window.
     ///
     /// * `parent` - The parent window.
     /// * `settings` - The settings of the window.
-    pub fn open_parented<P>(parent: &P, settings: Settings<A::Flags>)
+    pub fn open_parented<P>(
+        parent: &P,
+        settings: Settings<A::Flags>,
+    ) -> mpsc::UnboundedSender<baseview::Event>
     where
         P: HasRawWindowHandle,
     {
@@ -150,19 +162,25 @@ impl<A: Application + 'static + Send> IcedWindow<A> {
         let logical_height = settings.window.size.height as f64;
         let flags = settings.flags;
 
+        let (sender, receiver) = mpsc::unbounded();
+
         Window::open_parented(
             parent,
             settings.window,
             move |window: &mut baseview::Window<'_>| -> IcedWindow<A> {
-                IcedWindow::new(
+                let mut window = IcedWindow::new(
                     window,
                     flags,
                     scale_policy,
                     logical_width,
                     logical_height,
-                )
+                );
+                window.with_reciever(receiver);
+                window
             },
-        )
+        );
+
+        sender
     }
 
     /// Open a new window as if it had a parent window.
@@ -245,6 +263,13 @@ impl<A: Application + 'static + Send> WindowHandler for IcedWindow<A> {
             self.sender
                 .start_send(RuntimeEvent::UserEvent(message))
                 .expect("Send event");
+        }
+        if let Some(external_rx) = &mut self.external_rx {
+            while let Ok(Some(message)) = external_rx.try_next() {
+                self.sender
+                    .start_send(RuntimeEvent::Baseview(message))
+                    .expect("Couldn't send external user event");
+            }
         }
 
         // Send the event to the instance.
